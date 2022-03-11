@@ -104,9 +104,9 @@ class BinanceLocalDepthCacheManager(threading.Thread):
     def __init__(self, exchange: str = "binance.com",
                  default_refresh_interval: int = None,
                  default_update_interval: int = None,
-                 default_websocket_close_timeout: int = 0.1,
-                 default_websocket_ping_interval: int = 1,
-                 default_websocket_ping_timeout: int = 5,
+                 default_websocket_close_timeout: int = 2,
+                 default_websocket_ping_interval: int = 5,
+                 default_websocket_ping_timeout: int = 10,
                  disable_colorama: bool = False,
                  ubra_manager: Optional[Union[BinanceRestApiManager, bool]] = False,
                  ubwa_manager: Optional[Union[BinanceWebSocketApiManager, bool]] = False,
@@ -126,7 +126,6 @@ class BinanceLocalDepthCacheManager(threading.Thread):
         self.disable_colorama = disable_colorama
         self.last_update_check_github = {'timestamp': time.time(),
                                          'status': None}
-        self.timeout = 60
         try:
             self.ubra = ubra_manager or BinanceRestApiManager("*", "*",
                                                               exchange=self.exchange,
@@ -306,7 +305,7 @@ class BinanceLocalDepthCacheManager(threading.Thread):
                      f"with market {market.lower()}")
         return True
 
-    def _process_stream_data(self, stream_data: dict = None, stream_buffer_name=False) -> None:
+    def _process_stream_data(self, stream_data , stream_buffer_name=False) -> None:
         """
         Process depth stream_data
 
@@ -318,9 +317,15 @@ class BinanceLocalDepthCacheManager(threading.Thread):
         :type market: str
         :return: None
         """
-        print(str(stream_data))
-        market="lunabtc"
-        return None
+        market = ""
+        try:
+            market = stream_data['stream']
+        except KeyError:
+            pass
+        print(market)
+
+    def old_func(self):
+        return False
         if self.is_stop_request(market=market.lower()) is True:
             logger.debug(f"BinanceLocalDepthCacheManager._process_stream_data() - Clearing stream_buffer with stream_id"
                          f" {self.depth_caches[market.lower()]['stream_id']} of the "
@@ -542,7 +547,6 @@ class BinanceLocalDepthCacheManager(threading.Thread):
             else:
                 channel = f"depth@{update_interval}ms"
             stream_id = self.ubwa.create_stream(channel, market,
-                                                stream_buffer_name=True,
                                                 stream_label=f"ubldc_{market.lower()}",
                                                 output="dict",
                                                 close_timeout=websocket_close_timeout or self.default_websocket_close_timeout,
