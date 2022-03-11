@@ -34,7 +34,6 @@
 # IN THE SOFTWARE.
 
 from unicorn_binance_local_depth_cache import BinanceLocalDepthCacheManager, DepthCacheOutOfSync
-from unicorn_binance_websocket_api import BinanceWebSocketApiManager
 import logging
 import os
 import time
@@ -50,7 +49,7 @@ exchange = "binance.com-futures"
 
 ubldc = BinanceLocalDepthCacheManager(exchange=exchange)
 ubldc.create_depth_cache(markets=market, update_interval=100)
-
+time.sleep(3)
 while True:
     try:
         top_asks = ubldc.get_asks(market=market)[:3]

@@ -183,9 +183,7 @@ class BinanceLocalDepthCacheManager(threading.Thread):
                                                  'stop_request': False,
                                                  'stream_id': stream_id,
                                                  'stream_status': None,
-                                                 'market': market.lower(),
-                                                 'thread': None,
-                                                 'thread_is_started': False}
+                                                 'market': market.lower()}
             self.threading_lock_ask[market.lower()] = threading.Lock()
             self.threading_lock_bid[market.lower()] = threading.Lock()
             logger.debug(f"BinanceLocalDepthCacheManager._add_depth_cache() - Added new entry for market"
@@ -308,7 +306,7 @@ class BinanceLocalDepthCacheManager(threading.Thread):
                      f"with market {market.lower()}")
         return True
 
-    def _process_stream_data(self, market: str = None) -> None:
+    def _process_stream_data(self, stream_data: dict = None, stream_buffer_name=False) -> None:
         """
         Process depth stream_data
 
@@ -320,10 +318,10 @@ class BinanceLocalDepthCacheManager(threading.Thread):
         :type market: str
         :return: None
         """
-        logger.debug(f"BinanceLocalDepthCacheManager._process_stream_data() - Started thread for stream_data of "
-                     f"market {market.lower()}")
-        self.depth_caches[market.lower()]['thread_is_started'] = True
-        while self.is_stop_request(market=market.lower()) is False:
+        print(str(stream_data))
+        market="lunabtc"
+        return None
+        if self.is_stop_request(market=market.lower()) is True:
             logger.debug(f"BinanceLocalDepthCacheManager._process_stream_data() - Clearing stream_buffer with stream_id"
                          f" {self.depth_caches[market.lower()]['stream_id']} of the "
                          f"cache of market {market.lower()} (stream_buffer length: "
@@ -345,7 +343,7 @@ class BinanceLocalDepthCacheManager(threading.Thread):
             if not self._init_depth_cache(market=market.lower()):
                 logger.error(f"BinanceLocalDepthCacheManager._process_stream_data() - Not able to initiate depth_cache "
                              f"with market {market.lower()}")
-                continue
+                #continue
             while self.is_stop_request(market=market.lower()) is False:
                 if self.depth_caches[market.lower()]['refresh_request'] is True:
                     self.depth_caches[market.lower()]['is_synchronized'] = False
@@ -549,17 +547,9 @@ class BinanceLocalDepthCacheManager(threading.Thread):
                                                 output="dict",
                                                 close_timeout=websocket_close_timeout or self.default_websocket_close_timeout,
                                                 ping_timeout=websocket_ping_interval or self.default_websocket_ping_interval,
-                                                ping_interval=websocket_ping_timeout or self.default_websocket_ping_timeout)
+                                                ping_interval=websocket_ping_timeout or self.default_websocket_ping_timeout,
+                                                process_stream_data=self._process_stream_data)
             self._add_depth_cache(market=market.lower(), stream_id=stream_id, refresh_interval=refresh_interval)
-            self.depth_caches[market.lower()]['thread'] = threading.Thread(target=self._process_stream_data,
-                                                                           args=(market,))
-            self.depth_caches[market.lower()]['thread'].start()
-            while self.depth_caches[market.lower()]['thread_is_started'] is False:
-                # This is to await the creation of the thread to avoid errors if the main thread gets closed before.
-                # This can happen if after calling `create_depth_cache()` the main thread has no more code and exits.
-                logger.debug(f"BinanceLocalDepthCacheManager.create_depth_cache() - Waiting till thread for "
-                             f"market {market.lower()} is started")
-                time.sleep(0.01)
         return True
 
     def get_asks(self, market: str = None) -> list:
@@ -765,8 +755,10 @@ class BinanceLocalDepthCacheManager(threading.Thread):
             stream_id = copy.deepcopy(self.depth_caches[market.lower()]['stream_id'])
             self.depth_caches[market.lower()]['stop_request'] = True
             self.ubwa.stop_stream(stream_id=stream_id)
-            time.sleep(10)
-            self.ubwa.clear_stream_buffer(stream_buffer_name=stream_id)
+            if self.ubwa.wait_till_stream_has_stopped(stream_id=stream_id):
+                self.ubwa.clear_stream_buffer(stream_buffer_name=stream_id)
+                del self.threading_lock_ask[market.lower()]
+                del self.threading_lock_bid[market.lower()]
         return True
 
     def stop_manager_with_all_depth_caches(self) -> bool:
