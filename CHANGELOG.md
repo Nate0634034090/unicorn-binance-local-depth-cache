@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 
 [Discussions about unicorn-binance-websocket-api releases!](https://github.com/LUCIT-Systems-and-Development/unicorn-binance-local-depth-cache/discussions/categories/releases)
 
+branch: test_callback
+
 ## 0.6.0.dev (development stage/unreleased/unstable)
 ### Added
 - Active `high_performance` of UBWA.
