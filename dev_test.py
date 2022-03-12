@@ -39,26 +39,25 @@ import os
 import time
 
 logging.getLogger("unicorn_binance_local_depth_cache")
-logging.basicConfig(level=logging.INFO,
+logging.basicConfig(level=logging.DEBUG,
                     filename=os.path.basename(__file__) + '.log',
                     format="{asctime} [{levelname:8}] {process} {thread} {module}: {message}",
                     style="{")
 
 market = 'BTCUSDT'
-exchange = "binance.com"
+exchange = "binance.com-futures"
 
 ubldc = BinanceLocalDepthCacheManager(exchange=exchange)
-ubldc.create_depth_cache(markets=market, update_interval=1000)
-time.sleep(3)
+ubldc.create_depth_cache(markets=market, update_interval=100)
+
 while True:
-    time.sleep(100)
-try:
-    top_asks = ubldc.get_asks(market=market)[:3]
-    top_bids = ubldc.get_bids(market=market)[:3]
-except DepthCacheOutOfSync:
-    top_asks = "Out of sync!"
-    top_bids = "Out of sync!"
-depth = f"depth_cache is in sync: {ubldc.is_depth_cache_synchronized(market)}\r\n " \
-        f"top 3 asks: {top_asks}\r\n top 3 bids: {top_bids}"
-ubldc.print_summary(add_string=depth)
-time.sleep(1)
+    try:
+        top_asks = ubldc.get_asks(market=market)[:3]
+        top_bids = ubldc.get_bids(market=market)[:3]
+    except DepthCacheOutOfSync:
+        top_asks = "Out of sync!"
+        top_bids = "Out of sync!"
+    depth = f"depth_cache is in sync: {ubldc.is_depth_cache_synchronized(market)}\r\n " \
+            f"top 3 asks: {top_asks}\r\n top 3 bids: {top_bids}"
+    # ubldc.print_summary(add_string=depth)
+    time.sleep(1)

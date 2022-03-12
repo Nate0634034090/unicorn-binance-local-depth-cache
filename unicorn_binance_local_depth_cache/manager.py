@@ -149,6 +149,7 @@ class BinanceLocalDepthCacheManager(threading.Thread):
                                                                disable_colorama=True,
                                                                high_performance=True)
         self.stop_request = False
+        self.stream_buffers = {}
         self.threading_lock_ask = {}
         self.threading_lock_bid = {}
         if warn_on_update and self.is_update_available():
@@ -176,6 +177,7 @@ class BinanceLocalDepthCacheManager(threading.Thread):
             self.depth_caches[market.lower()] = {'asks': {},
                                                  'bids': {},
                                                  'is_synchronized': False,
+                                                 'sync_started': False,
                                                  'last_refresh_time': int(time.time()),
                                                  'last_update_id': None,
                                                  'refresh_interval': refresh_interval or self.default_refresh_interval,
@@ -184,6 +186,7 @@ class BinanceLocalDepthCacheManager(threading.Thread):
                                                  'stream_id': stream_id,
                                                  'stream_status': None,
                                                  'market': market.lower()}
+            self.stream_buffers[market.lower()] = []
             self.threading_lock_ask[market.lower()] = threading.Lock()
             self.threading_lock_bid[market.lower()] = threading.Lock()
             logger.debug(f"BinanceLocalDepthCacheManager._add_depth_cache() - Added new entry for market"
@@ -319,7 +322,10 @@ class BinanceLocalDepthCacheManager(threading.Thread):
                      f"with market {market.lower()}")
         return True
 
-    def _process_stream_data(self, stream_data , stream_buffer_name=False) -> None:
+    def _process_stream_data(self, stream_data, stream_buffer_name=False) -> None:
+        # Todo:
+        #  - Remove stream_buffer_name if ubwa > 1.40.3 released
+        #  - market = market.lower() everywhere
         """
         Process depth stream_data
 
@@ -333,6 +339,38 @@ class BinanceLocalDepthCacheManager(threading.Thread):
         :type stream_buffer_name: str
         :return: None
         """
+        try:
+            market = stream_data['stream'].split("@")[0].lower()
+        except KeyError:
+            return None
+        try:
+            print(f"ids: {stream_data['data']['pu']} - {stream_data['data']['u']}: "
+                  f"sync:{self.depth_caches[market.lower()]['is_synchronized']}")
+        except KeyError:
+            pass
+        if self.is_stop_request(market=market) is True:
+            logger.info(f"BinanceLocalDepthCacheManager._process_stream_data() - Catched stop_request "
+                        f"for depth_cache with market {market}")
+            return None
+        if self.depth_caches[market]['is_synchronized'] is False:
+            if len(self.stream_buffers[market]) >= 2 and self.depth_caches[market]['sync_started'] is False:
+                self.depth_caches[market]['sync_started'] = True
+                if self._init_depth_cache(market=market) is False:
+                    logger.error(f"BinanceLocalDepthCacheManager._process_stream_data() - Not able to initiate "
+                                 f"depth_cache with market {market}")
+                    self.stream_buffers[market].append(stream_data)
+                    self.depth_caches[market]['sync_started'] = False
+                    # Todo: start here
+                    return None
+                else:
+                    self._apply_updates(stream_data['data'], market=market)
+                    self.depth_caches[market]['is_synchronized'] = True
+            else:
+                self.stream_buffers[market].append(stream_data)
+                return None
+
+    def _process_stream_data_old(self, stream_data, stream_buffer_name=False) -> None:
+
         try:
             market = stream_data['stream'].split("@")[0]
         except KeyError:
@@ -354,6 +392,12 @@ class BinanceLocalDepthCacheManager(threading.Thread):
             logger.info(f"BinanceLocalDepthCacheManager._process_stream_data() - Catched refresh_request "
                         f"for depth_cache with market {market.lower()}")
         if self.depth_caches[market.lower()]['is_synchronized'] is False:
+            try:
+                print(f"ids: {stream_data['data']['pu']} - {stream_data['data']['u']}: "
+                      f"sync:{self.depth_caches[market.lower()]['is_synchronized']}")
+            except KeyError:
+                pass
+
             if self._init_depth_cache(market=market.lower()) is False:
                 logger.error(f"BinanceLocalDepthCacheManager._process_stream_data() - Not able to initiate depth_cache "
                              f"with market {market.lower()}")
